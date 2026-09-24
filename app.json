@@ -16,32 +16,32 @@
   "env": {
     "API_HASH": {
       "description": "Get this value from my.telegram.org",
-      "value": ""
+      "value": "b35b715fe8dc0a58e8048988286fc5b6"
     },
 
     "API_ID": {
       "description": "Get this value from my.telegram.org",
-      "value": ""
+      "value": "25742938"
     },
 
     "BOT_TOKEN": {
       "description": "Make a bot from @BotFather and paste the bot token here.",
-      "value": ""
+      "value": "7017034881:AAEqBP-IxCjnf4Q-1zo4cShPcYXXr5z62bo"
     },
 
     "DATABASE_URL": {
       "description": "Only use MongoDB URL here.",
-      "value": "mongodb+srv://Pbxbot:BADMYDAD@badhacker.i5nw9na.mongodb.net/"
+      "value": "mongodb+srv://aujla:aujla@teji.yqkrgos.mongodb.net/"
     },
 
     "LOGGER_ID": {
       "description": "Chat ID of your logging group/channel.",
-      "value": ""
+      "value": "-1003758847277"
     },
 
     "OWNER_ID": {
       "description": "Your Telegram user ID.",
-      "value": ""
+      "value": "8789271943"
     }
   },
 
