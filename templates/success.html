@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PBX 4.0 — Session Created!</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0d0d; --card: #161616; --border: #2a2a2a;
+      --accent: #7c3aed; --accent2: #a855f7; --text: #f0f0f0;
+      --green: #22c55e; --muted: #888; --input-bg: #1e1e1e; --radius: 14px;
+    }
+    body {
+      background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
+      min-height: 100vh; display: flex; align-items: center;
+      justify-content: center; padding: 24px;
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: 0 8px 40px rgba(0,0,0,.55);
+      width: 100%; max-width: 420px; padding: 36px 32px 32px; position: relative;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--green), #4ade80, var(--accent2));
+    }
+    .success-icon {
+      width: 64px; height: 64px; background: rgba(34,197,94,.12);
+      border: 2px solid rgba(34,197,94,.3); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.8rem; margin: 0 auto 20px;
+    }
+    h2 { font-size: 1.3rem; font-weight: 700; text-align: center; margin-bottom: 8px; color: var(--green); }
+    .subtitle { color: var(--muted); font-size: .87rem; text-align: center; margin-bottom: 24px; line-height: 1.5; }
+    .warning-box {
+      background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.25);
+      border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;
+      font-size: .82rem; color: #fca5a5; line-height: 1.5;
+    }
+    .warning-box strong { color: #f87171; }
+    .session-wrap { position: relative; margin-bottom: 20px; }
+    .session-box {
+      background: #0a0a0a; border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px; font-family: 'Courier New', monospace; font-size: .78rem;
+      color: #4ade80; word-break: break-all; line-height: 1.6; max-height: 130px;
+      overflow-y: auto;
+    }
+    .copy-btn {
+      position: absolute; top: 10px; right: 10px;
+      background: rgba(124,58,237,.2); border: 1px solid rgba(124,58,237,.3);
+      color: var(--accent2); border-radius: 7px; padding: 5px 10px;
+      font-size: .75rem; font-weight: 600; cursor: pointer; font-family: inherit;
+      transition: all .2s;
+    }
+    .copy-btn:hover { background: rgba(124,58,237,.35); }
+    .info-box {
+      background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.2);
+      border-radius: 10px; padding: 12px 16px; margin-bottom: 24px;
+      font-size: .82rem; color: #86efac; line-height: 1.6;
+    }
+    .btn {
+      display: block; width: 100%; padding: 13px; border: none; border-radius: 10px;
+      font-size: .92rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: all .2s;
+      text-decoration: none; text-align: center; margin-bottom: 10px;
+    }
+    .btn-green { background: linear-gradient(135deg, var(--green), #4ade80); color: #000; }
+    .btn-green:hover { opacity: .9; transform: translateY(-1px); }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent2); }
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--green); color: #000; font-weight: 600; padding: 10px 20px;
+      border-radius: 8px; font-size: .85rem; opacity: 0; transition: opacity .3s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="success-icon">✅</div>
+    <h2>Session Created!</h2>
+    <p class="subtitle">
+      Welcome, <strong>{{ user_name }}</strong>! Your session has been saved to DB.<br/>
+      Bot will auto-restart to load your account. 🔄
+    </p>
+
+    <div class="warning-box">
+      <strong>⚠️ Warning:</strong> Never share this session string with anyone. It gives full access to your Telegram account.
+    </div>
+
+    <div class="session-wrap">
+      <div class="session-box" id="sessionBox">{{ session_string }}</div>
+      <button class="copy-btn" onclick="copySession()">Copy</button>
+    </div>
+
+    <div class="info-box">
+      ✅ Session saved to database.<br/>
+      ✅ Sent to your Saved Messages.<br/>
+      🔄 Bot restarting in a few seconds to activate your userbot.
+    </div>
+
+    <a href="https://t.me/PBXCHATS" class="btn btn-green" target="_blank">
+      💬 ᴊᴏɪɴ ꜱᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ
+    </a>
+    <a href="/" class="btn btn-ghost">← ᴀᴅᴅ ᴀɴᴏᴛʜᴇʀ ᴀᴄᴄᴏᴜɴᴛ</a>
+  </div>
+
+  <div class="toast" id="toast">✅ Copied!</div>
+
+  <script>
+    function copySession() {
+      const text = document.getElementById('sessionBox').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const t = document.getElementById('toast');
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2000);
+      });
+    }
+  </script>
+</body>
+</html>

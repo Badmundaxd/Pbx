@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PBX 4.0 — Error</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0d0d; --card: #161616; --border: #2a2a2a;
+      --accent: #7c3aed; --accent2: #a855f7; --text: #f0f0f0;
+      --red: #ef4444; --muted: #888; --radius: 14px;
+    }
+    body {
+      background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
+      min-height: 100vh; display: flex; align-items: center;
+      justify-content: center; padding: 24px;
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: 0 8px 40px rgba(0,0,0,.55);
+      width: 100%; max-width: 420px; padding: 36px 32px 32px; position: relative;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--red), #f97316, #ec4899);
+    }
+    .err-icon {
+      width: 64px; height: 64px; background: rgba(239,68,68,.12);
+      border: 2px solid rgba(239,68,68,.3); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.8rem; margin: 0 auto 20px;
+    }
+    h2 { font-size: 1.3rem; font-weight: 700; text-align: center; margin-bottom: 20px; color: #f87171; }
+    .error-box {
+      background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.2);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 24px;
+      font-size: .87rem; color: #fca5a5; line-height: 1.6;
+    }
+    .btn {
+      display: block; width: 100%; padding: 13px; border: none; border-radius: 10px;
+      font-size: .92rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: all .2s;
+      text-decoration: none; text-align: center; margin-bottom: 10px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff;
+    }
+    .btn-primary:hover { opacity: .9; transform: translateY(-1px); }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent2); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="err-icon">❌</div>
+    <h2>Something went wrong</h2>
+    <div class="error-box">{{ error }}</div>
+    <a href="/" class="btn btn-primary">← ᴛʀʏ ᴀɢᴀɪɴ</a>
+    <a href="https://t.me/PBXCHATS" class="btn btn-ghost" target="_blank">💬 ɢᴇᴛ ꜱᴜᴘᴘᴏʀᴛ</a>
+  </div>
+</body>
+</html>
