@@ -3,7 +3,6 @@ from .config import ENV, Config, Limits, Symbols
 from .database import db
 from .initializer import GachaBotsSetup, TemplateSetup, UserSetup
 from .logger import LOGS
-from pytgcalls import PyTgCalls  
 
 __all__ = [
     "Pbxbot",
@@ -16,5 +15,4 @@ __all__ = [
     "TemplateSetup",
     "UserSetup",
     "LOGS",
-    "PyTgCalls", 
 ]
