@@ -39,8 +39,9 @@ class Config:
     HEROKU_APIKEY = getenv("HEROKU_APIKEY", None)
 
     # GitHub related configs
-    PLUGINS_REPO = getenv("PLUGINS_REPO", "Badmundaxd/Pbx")
+    PLUGINS_REPO = getenv("PLUGINS_REPO", "Badmunda98/PBXPLUGINS_4.0")
     DEPLOY_REPO = getenv("DEPLOY_REPO", "Badhacker98/PBX_4.0")
+    GIT_TOKEN = getenv("GIT_TOKEN", None)  # PAT for private PLUGINS_REPO/DEPLOY_REPO
     
     # Storage dir: you may or may not edit
     DWL_DIR = "./downloads/"

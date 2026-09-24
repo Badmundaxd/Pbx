@@ -8,6 +8,7 @@ from Pbxbot.core import (
     UserSetup,
     db,
     Pbxbot,
+    LOGS,
 )
 
 from Pbxbot.functions.tools import initialize_git
@@ -48,7 +49,11 @@ async def main():
 
     await TGraph.setup()
 
-    await initialize_git(Config.PLUGINS_REPO)
+    try:
+        await initialize_git(Config.PLUGINS_REPO)
+    except Exception as e:
+        LOGS.error(f"initialize_git failed: {e}")
+        LOGS.warning("Continuing without plugins-repo git sync.")
 
     await Pbxbot.start_message(__version__)
 

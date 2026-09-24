@@ -117,25 +117,35 @@ async def gen_changelogs(repo: Repo, branch: str) -> str:
     return changelogs
 
 
+def _repo_url(git_repo: str) -> str:
+    """Build the GitHub URL, injecting Config.GIT_TOKEN for private repos if set."""
+    if Config.GIT_TOKEN:
+        return f"https://{Config.GIT_TOKEN}@github.com/{git_repo}"
+    return f"https://github.com/{git_repo}"
+
+
 async def initialize_git(git_repo: str):
     force = False
     try:
         repo = Repo()
     except NoSuchPathError as pathErr:
-        repo.__del__()
         return False, pathErr, force
     except GitCommandError as gitErr:
-        repo.__del__()
         return False, gitErr, force
     except InvalidGitRepositoryError:
-        repo = Repo.init()
-        origin = repo.create_remote("upstream", f"https://github.com/{git_repo}")
-        origin.fetch()
-        repo.create_head("master", origin.refs.master)
-        repo.heads.master.set_tracking_branch(origin.refs.master)
-        repo.heads.master.checkout(True)
-        force = True
+        try:
+            repo = Repo.init()
+            origin = repo.create_remote("upstream", _repo_url(git_repo))
+            origin.fetch()
+            repo.create_head("master", origin.refs.master)
+            repo.heads.master.set_tracking_branch(origin.refs.master)
+            repo.heads.master.checkout(True)
+            force = True
+        except BaseException as initErr:
+            # Repo doesn't exist / not reachable / no network / private without token — don't crash the bot.
+            return False, initErr, force
+
     with contextlib.suppress(BaseException):
-        repo.create_remote("upstream", f"https://github.com/{git_repo}")
+        repo.create_remote("upstream", _repo_url(git_repo))
 
     return True, repo, force
