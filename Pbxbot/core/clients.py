@@ -302,9 +302,7 @@ class PbxClient(Client):
             """Har button ko alag color — index ke hisaab se cycle karo."""
             return _COLORS[index % len(_COLORS)]
 
-        await self.bot.send_animation(
-            Config.LOGGER_ID,
-            "https://files.catbox.moe/3k1u3k.mp4",
+        caption = (
             f"**{Symbols.check_mark} ᴘʙx 4.0 ɪs.ɴᴏᴡ ᴏɴʟɪɴᴇ!**\n\n"
             f"**{Symbols.triangle_right}  ᴄʟɪᴇɴᴛs ➠ ** `{len(self.users)}`\n"
             f"**{Symbols.triangle_right} ᴘʟᴜɢɪɴs ➠ ** `{len(Config.CMD_MENU)}`\n"
@@ -318,40 +316,60 @@ class PbxClient(Client):
             f"**{Symbols.triangle_right}  ᴘʏʀᴏɢʀᴀᴍ ᴠᴇʀsɪᴏɴ ➠ ** `{version['pyrogram']}`\n"
             f"**{Symbols.triangle_right}  ᴘʏᴛɢᴄᴀʟʟs ᴠᴇʀsɪᴏɴ ➠ ** `2.2.8`\n"
             f"**{Symbols.triangle_right}  ᴘʏᴛʜᴏɴ ᴠᴇʀsɪᴏɴ ➠ ** `{version['python']}`\n\n"
-            f"**</> @PBXCHATS**",
-            parse_mode=ParseMode.MARKDOWN,
-            disable_notification=True,
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "💫 sᴛᴀʀᴛ ᴍᴇ",
-                            url=f"https://t.me/{self.bot.me.username}?start=start",
-                            style=_color(0),
-                        ),
-                        InlineKeyboardButton(
-                            "💖 ʜᴏsᴛ",
-                            url="https://pbx4-0.vercel.app",
-                            style=_color(1),
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "⎯꯭̽🇨🇦꯭꯭ ⃪В꯭α꯭∂ ꯭м꯭υ꯭η∂꯭α_꯭آآ⎯꯭ ꯭̽🌸",
-                            url="https://t.me/ll_BAD_MUNDA_ll",
-                            style=_color(2),
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "🦋 𝐏ʙx 𝐁ᴏᴛ 𝐒ᴜᴘᴘᴏʀᴛ ❤️",
-                            url="https://t.me/PBXCHATS",
-                            style=_color(0),
-                        ),
-                    ],
-                ]
-            ),
+            f"**</> @PBXCHATS**"
         )
+        reply_markup = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "💫 sᴛᴀʀᴛ ᴍᴇ",
+                        url=f"https://t.me/{self.bot.me.username}?start=start",
+                        style=_color(0),
+                    ),
+                    InlineKeyboardButton(
+                        "💖 ʜᴏsᴛ",
+                        url="https://pbx4-0.vercel.app",
+                        style=_color(1),
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "⎯꯭̽🇨🇦꯭꯭ ⃪В꯭α꯭∂ ꯭м꯭υ꯭η∂꯭α_꯭آآ⎯꯭ ꯭̽🌸",
+                        url="https://t.me/ll_BAD_MUNDA_ll",
+                        style=_color(2),
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🦋 𝐏ʙx 𝐁ᴏᴛ 𝐒ᴜᴘᴘᴏʀᴛ ❤️",
+                        url="https://t.me/PBXCHATS",
+                        style=_color(0),
+                    ),
+                ],
+            ]
+        )
+
+        try:
+            await self.bot.send_animation(
+                Config.LOGGER_ID,
+                "https://files.catbox.moe/3k1u3k.mp4",
+                caption,
+                parse_mode=ParseMode.MARKDOWN,
+                disable_notification=True,
+                reply_markup=reply_markup,
+            )
+        except Exception as e:
+            LOGS.error(f"start_message: send_animation failed ({e}), falling back to text.")
+            try:
+                await self.bot.send_message(
+                    Config.LOGGER_ID,
+                    caption,
+                    parse_mode=ParseMode.MARKDOWN,
+                    disable_notification=True,
+                    reply_markup=reply_markup,
+                )
+            except Exception as e2:
+                LOGS.error(f"start_message: text fallback also failed: {e2}")
 
     async def startup(self) -> None:
         LOGS.info(
