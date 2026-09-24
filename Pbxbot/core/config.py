@@ -39,7 +39,7 @@ class Config:
     HEROKU_APIKEY = getenv("HEROKU_APIKEY", None)
 
     # GitHub related configs
-    PLUGINS_REPO = getenv("PLUGINS_REPO", "Badmunda98/PBXPLUGINS_4.0")
+    PLUGINS_REPO = getenv("PLUGINS_REPO", "Badmundaxd/Pbx")
     DEPLOY_REPO = getenv("DEPLOY_REPO", "Badhacker98/PBX_4.0")
     
     # Storage dir: you may or may not edit
